@@ -4,15 +4,41 @@ class Equation:
         self.right_expression = right_expression
 
 class Expression:
-    pass
+
+    def __add__(self, other):
+        return Addition(self, other)
+    
+    def __sub__(self, other):
+        return Subtraction(self, other)
+    
+    def __mul__(self, other):
+        return Multiplication(self, other)
 
 class Variable(Expression):
     def __init__(self, name):
         self.name = name
 
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return f"Variable({self.name})"
+    
+    def evaluate(self, variable_values):
+        return variable_values[self.name]
+
 class Constant(Expression):
     def __init__(self, value):
         self.value = value
+
+    def __str__(self):
+        return str(self.value)
+    
+    def __repr__(self):
+        return f"Constant({self.value})"
+    
+    def evaluate(self, variable_values):
+        return self.value
 
 class BinaryOperation(Expression):
     def __init__(self, left_expression, right_expression):
@@ -20,10 +46,60 @@ class BinaryOperation(Expression):
         self.right_expression = right_expression
 
 class Addition(BinaryOperation):
-    pass
+    def __init__(self, left_expression, right_expression):
+        super().__init__(left_expression, right_expression)
+    
+    def __str__(self):
+        return f"({self.left_expression} + {self.right_expression})"
+    
+    def __repr__(self):
+        return f"Addition({self.left_expression}, {self.right_expression})"
+    
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) + self.right_expression.evaluate(variable_values)
 
 class Subtraction(BinaryOperation):
-    pass
+    def __init__(self, left_expression, right_expression):
+        super().__init__(left_expression, right_expression)
+
+    def __str__(self):
+        return f"({self.left_expression} - {self.right_expression})"
+    
+    def __repr__(self):
+        return f"Subtraction({self.left_expression}, {self.right_expression})"
+    
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) - self.right_expression.evaluate(variable_values)
 
 class Multiplication(BinaryOperation):
-    pass
+    def __init__(self, left_expression, right_expression):
+        super().__init__(left_expression, right_expression)
+
+    def __str__(self):
+        return f"({self.left_expression} * {self.right_expression})"
+    
+    def __repr__(self):
+        return f"Multiplication({self.left_expression}, {self.right_expression})"
+    
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) * self.right_expression.evaluate(variable_values)
+
+#############################################
+
+# Some examples of how to use the classes above
+
+# 1. Create a variable
+x = Variable("x")
+print(x) # x
+
+# 2. Create a constant
+c = Constant(5)
+print(c) # 5
+
+# 3. Create an expression
+e = x + c
+print(e) # (x + 5)
+
+# 4. Evaluate an expression
+variable_values = {"x": 10}
+print(e.evaluate(variable_values)) # 15
