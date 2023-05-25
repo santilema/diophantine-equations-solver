@@ -100,12 +100,12 @@ class ParseKeyword(Parser):
 class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
     def __init__(self, text):
         self.text = text
-        self.white_space_parser = ParseChar(" ")
-        self.l_parenthesis_parser = ParseChar("(")
-        self.r_parenthesis_parser = ParseChar(")")
-        self.digit_parser = ParseDigit()
-        self.solve_parser = ParseKeyword("Solve")
-        self.such_that_parser = ParseKeyword("such that")
+        self.ws_p = ParseChar(" ")
+        self.lp_p = ParseChar("(")
+        self.rp_p = ParseChar(")")
+        self.digit_p = ParseDigit()
+        self.solve_p = ParseKeyword("Solve")
+        self.st_p = ParseKeyword("such that")
 
     # 1. Find keyword "Solve"
     # 2. Find all equations...
@@ -114,5 +114,29 @@ class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
     # 4. Find constraints...
     # 4.1 Find constants, variables and operators until a comma or a point. If comma, repeat this step.
 
+
     equations = []
     constraints = []
+
+    def parse_problem(self, current_string, kw1_found=False, kw2_found=False):
+
+        if len(current_string) < 1: return ""
+
+        # White spaces should always be ignored
+        elif self.ws_p.parse(current_string) != []:
+            rest_string = rest(self.ws_p.parse(current_string))
+            return self.parse_problem(rest_string, kw1_found, kw2_found)
+        
+        # Checks for "Solve"
+        elif self.solve_p.parse(current_string) != []:
+            rest_string = rest(self.solve_p.parse(current_string))
+            return self.parse_problem(rest_string, True, kw2_found)
+        
+        # Checks for "such that"
+        elif self.st_p.parse(current_string) != []:
+            rest_string = rest(self.st_p.parse(current_string))
+            return self.parse_problem(rest_string, kw1_found, True)
+        
+        # If kw1 and !kw2, look for equations
+
+        # If kw1 and kw2, look for constraints
