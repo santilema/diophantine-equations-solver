@@ -113,3 +113,6 @@ class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
     # 3. Find keywords "such that"
     # 4. Find constraints...
     # 4.1 Find constants, variables and operators until a comma or a point. If comma, repeat this step.
+
+    equations = []
+    constraints = []
