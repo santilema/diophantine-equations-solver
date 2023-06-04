@@ -7,4 +7,8 @@ def solve(description_path):
     file = open(description_path).read()
     print(file)
 
+    # parse expression and instantiate classes
+
+    # solve classes using toz3() methods
+
 solve("examples/example5.txt")
