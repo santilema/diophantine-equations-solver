@@ -5,12 +5,12 @@ class Equation:
         self.left_expression = left_expression
         self.right_expression = right_expression
 
+    def __str__(self):
+        return f"{self.left_expression} = {self.right_expression}"
+
 class Expression:
     def __add__(self, other):
         return Addition(self, other)
-    
-    def __sub__(self, other):
-        return Subtraction(self, other)
     
     def __mul__(self, other):
         return Multiplication(self, other)
@@ -53,7 +53,7 @@ class BinaryOperation(Expression):
         self.right_expression = right_expression
 
 class Addition(BinaryOperation):
-    def __init__(self, left_expression, right_expression):
+    def __init__(self, left_expression=None, right_expression=None):
         super().__init__(left_expression, right_expression)
     
     def __str__(self):
@@ -69,7 +69,7 @@ class Addition(BinaryOperation):
         return self.left_expression.evaluate(variable_values) + self.right_expression.evaluate(variable_values)
 
 class Multiplication(BinaryOperation):
-    def __init__(self, left_expression, right_expression):
+    def __init__(self, left_expression=None, right_expression=None):
         super().__init__(left_expression, right_expression)
 
     def __str__(self):
@@ -87,24 +87,24 @@ class Multiplication(BinaryOperation):
 
 #############################################
 
-# Some examples of how to use the classes above
+# # Some examples of how to use the classes above
 
-# 1. Create a variable
-x = Variable("x")
-print(x) # x
+# # 1. Create a variable
+# x = Variable("x")
+# print(x) # x
 
-# 2. Create a constant
-c = Constant(5)
-print(c) # 5
+# # 2. Create a constant
+# c = Constant(5)
+# print(c) # 5
 
-# 3. Create an expression
-e = x + c
-print(e) # (x + 5)
+# # 3. Create an expression
+# e = x + c
+# print(e) # (x + 5)
 
-# 4. Evaluate an expression
-variable_values = {"x": 10}
-print(e.evaluate(variable_values)) # 15
+# # 4. Evaluate an expression
+# variable_values = {"x": 10}
+# print(e.evaluate(variable_values)) # 15
 
-# 5. Create z3 sum
-sum_z3 = e.toz3()
-print(sum_z3)
+# # 5. Create z3 sum
+# sum_z3 = e.toz3()
+# print(sum_z3)

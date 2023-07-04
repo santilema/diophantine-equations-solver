@@ -1,4 +1,5 @@
 from symbolic_classes import *
+from string_formater import *
 
 # Parsers from the lectures
 
@@ -99,12 +100,12 @@ class ParseKeyword(Parser):
                                                 (ParseKeyword(self.keyword[1:]) if len(self.keyword) > 1 else Return([])) >> (lambda xs: \
                                                     Return(Parser.cons(x, xs))))
         
-class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
-    def __init__(self, text):
-        self.text = text
+class ParseDiophantine():
+    def __init__(self):
         self.ws_p = ParseChar(" ")
         self.lp_p = ParseChar("(")
         self.rp_p = ParseChar(")")
+        self.comma_p = ParseChar(",")
         self.digit_p = ParseDigit()
         self.solve_p = ParseKeyword("Solve")
         self.st_p = ParseKeyword("such that")
@@ -121,23 +122,6 @@ class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
     constraints = []
 
     # Helper functions to parse problems to the symbolic classes
-
-    def find_closing_parenthesis(self, string):
-        '''
-        This helper function returns the position of the closing parenthesis
-        '''
-        l_parenthesis = 1
-        r_parenthesis = 0
-        position = 0
-
-        for c in string:
-            if c == '(': l_parenthesis += 1
-            if c == ')': r_parenthesis += 1
-
-            if l_parenthesis == r_parenthesis:
-                return position
-
-            position += 1
 
     def parse_var_cons(self, string):
         is_constant = False
@@ -159,135 +143,201 @@ class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
 
             if is_negative: constant_value =  0 - int(full_integer)
             else: constant_value = int(full_integer)
-            result = Constant(constant_value)
+            term = Constant(constant_value)
         else:
             if is_negative: name = '-' + string[0]
             else: name = string[0]
-            result = Variable(name)
+            term = Variable(name)
             rest_string = string[1:]
 
-        return [(result, rest_string)]
+        return [(term, rest_string)]
 
 
 
-    def parse_operation(self, string):
+    def parse_operation(self, string, addition=True, multiplication=True):
         '''
         Helper function which parses binary operator and returns the appropriate class and the rest of the string
         '''
         rest_position = 0
-        operator_found = False
+        rest_string = string
 
-        while not operator_found:
-            if len(string) < rest_position:
-                raise RuntimeError(f'Something went wrong parsing an operator in {string}')
-
+        while len(rest_string) > 1:
             rest_string = string[rest_position:]
-            # multiplication: positive integer, opening parenthesis or '*' symbol
-            # In first two cases operates "as if the symbol were invisible" and returns the same string as rest
+
+            # if there is a parenthesis, return the closing parenthesis position and the next operator (if any)
+            # This intends to just return operators in the current level of the parsing tree
             if self.lp_p.parse(rest_string) != []:
-                return [(Multiplication(), rest_string)]
-            elif self.digit_p.parse(rest_string) != []:
-                return [(Multiplication(), rest_string)]
-            # Last case, symbol is explicit therefore the actual rest is returned
-            elif rest_string[0] == '*':
-                return [(Multiplication(), rest_string[1:])]
+                closing_parenthesis_finder = self.find_closing_parenthesis(string[rest_position:])
+                closing_parenthesis = closing_parenthesis_finder["closing_parenthesis"]
+                next_operator = closing_parenthesis_finder["next_operator"]
+                if next_operator != []:
+                    return [(result(next_operator), string[closing_parenthesis + 1:]), closing_parenthesis + 1]
+                else:
+                    return []
+        
+            if (multiplication):
+                # multiplication: positive integer, opening parenthesis or '*' symbol
+                # In first two cases operates "as if the symbol were invisible" and returns the same string as rest
+                if rest_string[0] == '*':
+                    return [(Multiplication(), rest_string[1:]), rest_position + 1]
             
-            # addition: '-' or '+' symbol
-            # first case returns the whole string as rest
-            elif rest_string[0] == '-':
-                return [(Addition(), rest_string)]
-            elif rest_string[0] == '+':
-                return [('Addition()', rest_string[1:])]
+            if (addition):
+                # addition: '-' or '+' symbol
+                # first case returns the whole string as rest
+                if rest_string[0] == '-':
+                    return [(Addition(), rest_string), rest_position + 1]
+                elif rest_string[0] == '+':
+                    return [(Addition(), rest_string[1:]), rest_position + 1]
 
-            elif rest_string[0] == ' ':
-                rest_position += 1
-            # If it's none from the above, then there is no further operator
-            else:
-                return []
+            rest_position += 1
+        # If it's none from the above, then there is no further operator
+        return []
+            
+    def find_closing_parenthesis(self, string):
+        '''
+        This helper function returns the position of the closing parenthesis
+        and the next operator (if any)
+        '''
+        l_parenthesis = 0
+        r_parenthesis = 0
+        position = 0
+
+        for c in string:
+            if c == '(': l_parenthesis += 1
+            if c == ')': r_parenthesis += 1
+
+            if l_parenthesis == r_parenthesis:
+                # evaluate position is not the last character
+                if position < len(string) - 1:
+                    # if the next character is an operator, return it
+                    if self.parse_operation(string[position + 1:]) != []:
+                        return {
+                            "closing_parenthesis": position,
+                            "next_operator": self.parse_operation(string[position + 1:])
+                        } 
+                return {
+                    "closing_parenthesis": position,
+                    "next_operator": []
+                }
+            position += 1
             
 
-    def parse_expression(self, string, arg1=None, arg2=None, operator=None):
+    def parse_expression(self, string):
         '''
         parse_expression(string, stop_symbol) -> (Expression, rest)
         '''
-        # Skip white spaces
-        if self.ws_p.parse(string) != []:
-            return self.parse_expression(rest(self.ws_p.parse(string)))
 
         # If there is a parenthesis, apply recursively
         if self.lp_p.parse(string) != []:
-            closing_parenthesis = self.find_closing_parenthesis(string)
-            # parse next operator
-            operator_parser = self.parse_operation(string[closing_parenthesis:])
+            closing_parenthesis_finder = self.find_closing_parenthesis(string)
+            closing_parenthesis = closing_parenthesis_finder["closing_parenthesis"]
+            next_operator = closing_parenthesis_finder["next_operator"]
 
-            if operator_parser != []:
+            # if there is no further operator, return the expression inside the parenthesis
+            if next_operator == []:
                 return self.parse_expression(string[1:closing_parenthesis])
+            else:
+                next_operator = result(next_operator)
+                # The operator is a class already
+                next_operator.left_expression = self.parse_expression(string[1:closing_parenthesis])
+                next_operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:])
             
-            operator = result(operator_parser)
 
             operator.left_expression = self.parse_expression(string[1:closing_parenthesis])
-            operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:])
-            return operator
-        
-        elif arg1 == None:  
+            
+            # If operator is Addition, parse the right expression
+            if isinstance(operator, Addition):
+                operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:])
+                return operator
+            # If operator is Multiplication, look for an operator with higher precedence
+            elif isinstance(operator, Multiplication):
+                next_addition = self.parse_operation(string[closing_parenthesis + 1:], multiplication=False)
+                # If there is no further sum operator, return the expression inside the parenthesis
+                if next_addition == []:
+                    operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:])
+                    return operator
+                # If there is a further operator and it is Addition, return the addition with the multiplication as left expression
+                else:
+                    if isinstance(result(next_addition), Addition):
+                        expression_end = next_addition[1]
+                        next_addition = result(next_addition)
+                        operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:expression_end])
+                        next_addition.left_expression = operator
+                        next_addition.right_expression = self.parse_expression(string[expression_end + 1:])
+                        return next_addition
+        else:
             # Expressions should start with constants or variables (after dealing with parenthesis and white spaces)
             term = result(self.parse_var_cons(string))
             rest_string = rest(self.parse_var_cons(string))
 
             operator_parser = self.parse_operation(rest_string)
-            operator = result(operator_parser)
-            rest_string = rest(operator_parser)
 
-            return self.parse_expression(rest_string, term, None, operator)
-
-        elif arg2==None:
-            if isinstance(operator, Addition):
-                operator.left_expression = arg1
-                # simpler case:
-                # If we already have an arg1 and the operator is "+", no matter what comes next, it will be arg2 as or
-                # is the operator with highest precedence.
-                term = result(self.parse_var_cons(string))
-                rest_string = rest(self.parse_var_cons(string))
-
-                operator_parser = self.parse_operation(rest_string)
-                if operator_parser != []:
-                    operator.right_expression = term
-                else:
-                    next_operator = result(operator_parser)
-                    rest_string = rest(operator_parser)
-                    operator.right_expression = self.parse_expression(rest_string, term, None, next_operator)
-
-                return operator
-            elif isinstance(operator, Multiplication):
-                """
-                Behavior description:
-                If we already have an arg1 and the operator is "*", if there is no further operator, arg2 is the next var/const.
-                If the next operator is "+", arg1 will store the current "Multiplication" expression and the current operator becomes "+"
-                If the next operator is another "*", arg1 will store the current "Multiplication" expression and the current operator becomes "*".
-                """
-                term = result(self.parse_var_cons(string))
-                rest_string = rest(self.parse_var_cons(string))
-
-                operator_parser = self.parse_operation(rest_string)
-                if operator_parser != []:
-                    next_operator = result(operator_parser)
-                    rest_string = rest(operator_parser)
-
-                    operator.left_expression = arg1
-                    operator.right_expression = term
+            # If there is no operator, return the term
+            if operator_parser == []:
+                return term
+            else:
+                operator = result(operator_parser)
+                rest_string = rest(operator_parser)
+                # If the operator is an Addition, parse the right expression
+                if isinstance(operator, Addition):
+                    operator.left_expression = term
+                    operator.right_expression = self.parse_expression(rest_string)
+                    return operator
+                # If the operator is a Multiplication, look for an operator with higher precedence
+                elif isinstance(operator, Multiplication):
+                    next_addition = self.parse_operation(rest_string, multiplication=False)
+                    # If there is no further sum operator, parse the right expression and return the multiplication
+                    if next_addition == []:
+                        operator.left_expression = term
+                        operator.right_expression = self.parse_expression(rest_string)
+                        return operator
+                    # If there is a further operator and it is Addition, return the addition with the multiplication as left expression
+                    else:
+                        expression_end = next_addition[1]
+                        next_addition = result(next_addition)
+                        operator.left_expression = term
+                        operator.right_expression = self.parse_expression(rest_string[:expression_end])
+                        next_addition.left_expression = operator
+                        next_addition.right_expression = self.parse_expression(rest_string[expression_end + 1:])
+                        return next_addition
                     
-                    if isinstance(next_operator, Addition):
-                        return self.parse_expression(rest_string, operator, None, next_operator)
-                    elif isinstance(next_operator, Multiplication)
-                    # Seguir aca, ver comment de la funcion
-                else:
-                    operator.left_expression = arg1
-                    operator.right_expression = term
+    def parse_equation(self, string):
+        # Position of the equal sign
+        equal_position = string.find('=')
+        left_expression = self.parse_expression(format_string(string[:equal_position]))
+        right_expression = self.parse_expression(format_string(string[equal_position + 1:]))
+        return Equation(left_expression, right_expression)
                 
-                
+    def equations_finder(self, string):
+        position = 0
+        current_equation = ''
+        found_equations = []
+        while position < len(string):
+            current_character = string[position]
+            if self.ws_p.parse(string[position:]) != []:
+                position += 1
+                continue # skip white spaces
+            elif self.st_p.parse(string[position:]) != []:
+                # found keyword "such that", return the equations and the rest of the string
+                found_equations.append(current_equation)
+                return {
+                    "found_expressions": found_equations,
+                    "rest_string": string[position + 1:]
+                }
+            elif self.comma_p.parse(string[position:]) != []:
+                # found comma, add the equation to the list and reset the current equation
+                found_equations.append(current_equation)
+                current_equation = ''
+            else:
+                current_equation += current_character
+            position += 1
+        # if the end of the string is reached, return the equations and the rest of the string
+        found_equations.append(current_equation)
+        return {
+            "found_expressions": found_equations,
+            "rest_string": ""
+        }
             
-            
-        
     # main parsing function
 
     def parse_problem(self, current_string, kw1_found=False, kw2_found=False):
@@ -304,15 +354,38 @@ class ParseDiophantine(ParseKeyword, ParseChar, ParseKeyword, ParseId):
             rest_string = rest(self.solve_p.parse(current_string))
             return self.parse_problem(rest_string, True, kw2_found)
         
-        # Checks for "such that"
-        elif self.st_p.parse(current_string) != []:
-            rest_string = rest(self.st_p.parse(current_string))
-            return self.parse_problem(rest_string, kw1_found, True)
-        
         # If kw1 and !kw2, look for equations
         if (kw1_found and not kw2_found):
-            equation = Equation()
-            # look for an `=` for left_expression
-            # parse_equation
+            # Find all equations
+            equation_finder = self.equations_finder(current_string)
+            equations = equation_finder["found_expressions"]
+            rest_string = equation_finder["rest_string"]
+
+            # Parse equations to symbolic classes
+            symbolic_equations = []
+            for equation in equations:
+                symbolic_equations.append(self.parse_equation(equation))
+
+            return {
+                "equations": symbolic_equations,
+                "constraints": self.parse_problem(rest_string, kw1_found, True)
+            }
 
         # If kw1 and kw2, look for constraints
+        elif (kw1_found and kw2_found):
+            if len(current_string) < 1: return ""
+
+
+# Testing the parser
+
+# without constraints
+# problem0 = " Solve  x + 2 = 3"
+# problem1 = " Solve  x + 2 = 3, y + 3 = 4"
+# problem2 = " Solve  x + 2 = 3, y + 3 = 4, x*2 = 4"
+# problem3 = " Solve x + 2 = 3, y + 3 = 4, x*2 = 4, y * (2 + y) = 6"
+# problem4 = " Solve y * (2 + y) + 1 = y * (2 + x), x = 2"
+
+# parser = ParseDiophantine()
+
+# for equation in parser.parse_problem(problem4)["equations"]:
+#     print(equation)
