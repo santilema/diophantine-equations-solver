@@ -3,7 +3,7 @@ from parsers import *
 
 def solve(description_path):
     """
-    Solves a diophantine equation problem given a path to a file containing the problem description.
+    Solves a diophantine equation problem given a path to a file containing the problem description. Examples:
     >>> solve("examples/example1.txt")
     [z = -11, y = 27, x = -6]
     >>> solve("examples/example2.txt")
@@ -11,12 +11,11 @@ def solve(description_path):
     >>> solve("examples/example3.txt")
     [x = 3, z = -1, y = -18]
     >>> solve("examples/example4.txt")
-    Unsolvable!
+    No solution!
     >>> solve("examples/example5.txt")
-    [u = 6, v = -1, z = -7, y = -2, x = 6, t = 6]
+    [t = 6, v = -5, u = 7, z = -8, x = 1, y = -2]
     """
     file = open(description_path).read()
-    print(file)
 
     # parse expression and instantiate classes
     parser = ParseDiophantine()
