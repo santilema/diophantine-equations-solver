@@ -35,10 +35,3 @@ def format_string(input_string):
         i += 1
 
     return transformed_string
-
-# Test
-
-# print(format_string("c(x) + c(3y) + c(z)"))
-# print(format_string("2a + 3(x - 2)"))
-# print(format_string("2a + 3(x - 2) - 2a"))
-# print(format_string("2*a(5 - 2b) + 3*(x - 2) - 2*a + 3(x - 2)"))

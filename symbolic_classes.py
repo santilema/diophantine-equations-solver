@@ -7,6 +7,9 @@ class Equation:
 
     def __str__(self):
         return f"{self.left_expression} = {self.right_expression}"
+    
+    def toz3(self):
+        return self.left_expression.toz3() == self.right_expression.toz3()
 
 class Expression:
     def __add__(self, other):
@@ -84,27 +87,68 @@ class Multiplication(BinaryOperation):
     def evaluate(self, variable_values):
         return self.left_expression.evaluate(variable_values) * self.right_expression.evaluate(variable_values)
 
+class Conjunction(BinaryOperation):
+    def __init__(self, left_expression=None, right_expression=None):
+        super().__init__(left_expression, right_expression)
+
+    def __str__(self):
+        return f"({self.left_expression} and {self.right_expression})"
+    
+    def __repr__(self):
+        return f"Conjunction({self.left_expression}, {self.right_expression})"
+    
+    def toz3(self):
+        return And(self.left_expression.toz3(), self.right_expression.toz3())
+
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) and self.right_expression.evaluate(variable_values)
+    
+class OrUnion(BinaryOperation):
+    def __init__(self, left_expression=None, right_expression=None):
+        super().__init__(left_expression, right_expression)
+
+    def __str__(self):
+        return f"({self.left_expression} or {self.right_expression})"
+    
+    def __repr__(self):
+        return f"Union({self.left_expression}, {self.right_expression})"
+    
+    def toz3(self):
+        return Or(self.left_expression.toz3(), self.right_expression.toz3())
+
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) or self.right_expression.evaluate(variable_values)
+    
+class GreaterThan(BinaryOperation):
+    def __init__(self, left_expression=None, right_expression=None):
+        super().__init__(left_expression, right_expression)
+
+    def __str__(self):
+        return f"({self.left_expression} > {self.right_expression})"
+    
+    def __repr__(self):
+        return f"GreaterThan({self.left_expression}, {self.right_expression})"
+    
+    def toz3(self):
+        return self.left_expression.toz3() > self.right_expression.toz3()
+
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) > self.right_expression.evaluate(variable_values)
+    
+class LessThan(BinaryOperation):
+    def __init__(self, left_expression=None, right_expression=None):
+        super().__init__(left_expression, right_expression)
+
+    def __str__(self):
+        return f"({self.left_expression} < {self.right_expression})"
+    
+    def __repr__(self):
+        return f"LessThan({self.left_expression}, {self.right_expression})"
+    
+    def toz3(self):
+        return self.left_expression.toz3() < self.right_expression.toz3()
+
+    def evaluate(self, variable_values):
+        return self.left_expression.evaluate(variable_values) < self.right_expression.evaluate(variable_values)
 
 #############################################
-
-# # Some examples of how to use the classes above
-
-# # 1. Create a variable
-# x = Variable("x")
-# print(x) # x
-
-# # 2. Create a constant
-# c = Constant(5)
-# print(c) # 5
-
-# # 3. Create an expression
-# e = x + c
-# print(e) # (x + 5)
-
-# # 4. Evaluate an expression
-# variable_values = {"x": 10}
-# print(e.evaluate(variable_values)) # 15
-
-# # 5. Create z3 sum
-# sum_z3 = e.toz3()
-# print(sum_z3)

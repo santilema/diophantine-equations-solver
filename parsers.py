@@ -1,5 +1,6 @@
-from symbolic_classes import *
-from string_formater import *
+from symbolic_classes import OrUnion, Conjunction, Addition, Multiplication, Constant, Variable, Equation, LessThan, GreaterThan
+from string_formatter import *
+from z3 import *
 
 # Parsers from the lectures
 
@@ -103,28 +104,22 @@ class ParseKeyword(Parser):
 class ParseDiophantine():
     def __init__(self):
         self.ws_p = ParseChar(" ")
+        self.line_break_p = ParseKeyword("\n")
         self.lp_p = ParseChar("(")
         self.rp_p = ParseChar(")")
         self.comma_p = ParseChar(",")
+        self.dot_p = ParseChar(".")
+        self.great_p = ParseChar(">")
+        self.less_p = ParseChar("<")
         self.digit_p = ParseDigit()
+        self.and_p = ParseKeyword("and")
+        self.or_p = ParseKeyword("or")
         self.solve_p = ParseKeyword("Solve")
         self.st_p = ParseKeyword("such that")
-
-    # 1. Find keyword "Solve"
-    # 2. Find all equations...
-    # 2.1 Find constants, variables and operators until a comma or a point. If comma, repeat this step.
-    # 3. Find keywords "such that"
-    # 4. Find constraints...
-    # 4.1 Find constants, variables and operators until a comma or a point. If comma, repeat this step.
-
-
-    equations = []
-    constraints = []
 
     # Helper functions to parse problems to the symbolic classes
 
     def parse_var_cons(self, string):
-        is_constant = False
         is_negative = False
         rest_string = string
 
@@ -133,7 +128,6 @@ class ParseDiophantine():
             rest_string = rest_string[1:]
     
         if self.digit_p.parse(rest_string) != []:
-            is_constant = True
             full_integer = result(self.digit_p.parse(rest_string))
             rest_string = rest(self.digit_p.parse(rest_string))
             # loop to get full integer
@@ -141,14 +135,20 @@ class ParseDiophantine():
                 full_integer = full_integer + result(self.digit_p.parse(rest_string))
                 rest_string = rest(self.digit_p.parse(rest_string))
 
-            if is_negative: constant_value =  0 - int(full_integer)
-            else: constant_value = int(full_integer)
+            constant_value = int(full_integer)
+            if is_negative: constant_value = -constant_value
             term = Constant(constant_value)
+        elif self.lp_p.parse(rest_string) != []:
+            closing_parenthesis_finder = self.find_closing_parenthesis(rest_string)
+            closing_parenthesis = closing_parenthesis_finder["closing_parenthesis"]
+            term = self.parse_expression(rest_string[1:closing_parenthesis])
+            if is_negative: term = Multiplication(Constant(-1), term)
+            rest_string = rest_string[closing_parenthesis + 1:]
         else:
-            if is_negative: name = '-' + string[0]
-            else: name = string[0]
+            name = rest_string[0]
             term = Variable(name)
-            rest_string = string[1:]
+            if is_negative: term = Multiplication(Constant(-1), term)
+            rest_string = rest_string[1:]
 
         return [(term, rest_string)]
 
@@ -223,10 +223,6 @@ class ParseDiophantine():
             
 
     def parse_expression(self, string):
-        '''
-        parse_expression(string, stop_symbol) -> (Expression, rest)
-        '''
-
         # If there is a parenthesis, apply recursively
         if self.lp_p.parse(string) != []:
             closing_parenthesis_finder = self.find_closing_parenthesis(string)
@@ -237,16 +233,10 @@ class ParseDiophantine():
             if next_operator == []:
                 return self.parse_expression(string[1:closing_parenthesis])
             else:
-                next_operator = result(next_operator)
-                # The operator is a class already
-                next_operator.left_expression = self.parse_expression(string[1:closing_parenthesis])
-                next_operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:])
-            
-
-            operator.left_expression = self.parse_expression(string[1:closing_parenthesis])
-            
+                operator = result(next_operator)            
             # If operator is Addition, parse the right expression
             if isinstance(operator, Addition):
+                operator.left_expression = self.parse_expression(string[1:closing_parenthesis])
                 operator.right_expression = self.parse_expression(string[closing_parenthesis + 1:])
                 return operator
             # If operator is Multiplication, look for an operator with higher precedence
@@ -298,7 +288,7 @@ class ParseDiophantine():
                         operator.left_expression = term
                         operator.right_expression = self.parse_expression(rest_string[:expression_end])
                         next_addition.left_expression = operator
-                        next_addition.right_expression = self.parse_expression(rest_string[expression_end + 1:])
+                        next_addition.right_expression = self.parse_expression(rest_string[expression_end:])
                         return next_addition
                     
     def parse_equation(self, string):
@@ -307,7 +297,104 @@ class ParseDiophantine():
         left_expression = self.parse_expression(format_string(string[:equal_position]))
         right_expression = self.parse_expression(format_string(string[equal_position + 1:]))
         return Equation(left_expression, right_expression)
-                
+    
+    def search_in_same_level(self, string, parser):
+        l_parenthesis = 0
+        r_parenthesis = 0
+        position = 0
+
+        while position < len(string):
+            if string[position] == '(': l_parenthesis += 1
+            if string[position] == ')': r_parenthesis += 1
+
+            if l_parenthesis == r_parenthesis:
+                if parser.parse(string[position:]) != []:
+                    return position
+            position += 1
+        return None
+    
+    def parse_constraint(self, string):
+        if len(string) < 1: return ""
+        # if there are parenthesis, apply recursively
+        if self.lp_p.parse(string) != []:
+            closing_parenthesis_finder = self.find_closing_parenthesis(string)
+            closing_parenthesis = closing_parenthesis_finder["closing_parenthesis"]
+
+            # parse operator after the parenthesis
+            if self.and_p.parse(string[closing_parenthesis + 1:]) != []:
+                operator = result(self.and_p.parse(string[closing_parenthesis + 1:]))
+                rest_string = rest(self.and_p.parse(string[closing_parenthesis + 1:]))
+            elif self.or_p.parse(string[closing_parenthesis + 1:]) != []:
+                operator = result(self.or_p.parse(string[closing_parenthesis + 1:]))
+                rest_string = rest(self.or_p.parse(string[closing_parenthesis + 1:]))
+            else:
+                return self.parse_constraint(string[1:closing_parenthesis]) # if no operator, return the expression inside the parenthesis
+            
+            # parse left expression
+            if operator == 'or':
+                operator_instance = OrUnion()
+                operator_instance.left_expression = self.parse_constraint(string[1:closing_parenthesis])
+                operator_instance.right_expression = self.parse_constraint(rest_string)
+                return operator_instance
+            elif operator == 'and':
+                operator_instance = Conjunction()
+                # We need to know if there will be any further or operator in the right expression
+                next_or_position = self.search_in_same_level(rest_string, self.or_p)
+                if next_or_position == None:
+                    # There is no operator of higher precedence, so the right expression is the rest of the string
+                    operator_instance.left_expression = self.parse_constraint(string[1:closing_parenthesis])
+                    operator_instance.right_expression = self.parse_constraint(rest_string)
+                    return operator_instance
+                else:
+                    # There is an operator of higher precedence, so the right expression is the string until that operator
+                    operator_instance.left_expression = self.parse_constraint(string[1:closing_parenthesis])
+                    operator_instance.right_expression = self.parse_constraint(rest_string[:next_or_position])
+                    # The next operator is an or, so we need to parse it recursively
+                    next_operator = OrUnion()
+                    next_operator.left_expression = operator_instance
+                    next_operator.right_expression = self.parse_constraint(rest_string[next_or_position + 2:])
+                    return next_operator
+
+        else:
+            # Expressions should start with constants or variables (after dealing with parenthesis and white spaces)
+            term = result(self.parse_var_cons(string))
+            rest_string = rest(self.parse_var_cons(string))
+            # greater than or less than symbol
+            if self.great_p.parse(rest_string) != []:
+                second_term = result(self.parse_var_cons(rest_string[1:]))
+                rest_string = rest(self.parse_var_cons(rest_string[1:]))
+                inequality = GreaterThan(term, second_term)
+            elif self.less_p.parse(rest_string) != []:
+                second_term = result(self.parse_var_cons(rest_string[1:]))
+                rest_string = rest(self.parse_var_cons(rest_string[1:]))
+                inequality = LessThan(term, second_term)
+            
+            if len(rest_string)<1: return inequality
+            elif self.or_p.parse(rest_string) != []:
+                operator_instance = OrUnion()
+                operator_instance.left_expression = inequality
+                operator_instance.right_expression = self.parse_constraint(rest_string[2:])
+                return operator_instance
+            elif self.and_p.parse(rest_string) != []:
+                operator_instance = Conjunction()
+                    # We need to know if there will be any further or operator in the right expression
+                next_or_position = self.search_in_same_level(rest_string, self.or_p)
+                if next_or_position == None:
+                    # There is no operator of higher precedence, so the right expression is the rest of the string
+                    operator_instance.left_expression = inequality
+                    operator_instance.right_expression = self.parse_constraint(rest_string[3:])
+                    return operator_instance
+                else:
+                    # There is an operator of higher precedence, so the right expression is the string until that operator
+                    operator_instance.left_expression = inequality
+                    operator_instance.right_expression = self.parse_constraint(rest_string[3:next_or_position])
+                    # The next operator is an or, so we need to parse it recursively
+                    next_operator = OrUnion()
+                    next_operator.left_expression = operator_instance
+                    next_operator.right_expression = self.parse_constraint(rest_string[next_or_position + 2:])
+                    return next_operator
+
+
     def equations_finder(self, string):
         position = 0
         current_equation = ''
@@ -317,20 +404,31 @@ class ParseDiophantine():
             if self.ws_p.parse(string[position:]) != []:
                 position += 1
                 continue # skip white spaces
-            elif self.st_p.parse(string[position:]) != []:
-                # found keyword "such that", return the equations and the rest of the string
+            elif self.line_break_p.parse(string[position:]) != []:
+                position += 1
+                continue # skip line breaks
+            elif self.dot_p.parse(string[position:]) != []:
+                # found '.', return the equations and the rest of the string
                 found_equations.append(current_equation)
                 return {
                     "found_expressions": found_equations,
                     "rest_string": string[position + 1:]
                 }
+            elif self.st_p.parse(string[position:]) != []:
+                # found "such that", return the equations and the rest of the string
+                found_equations.append(current_equation)
+                return {
+                    "found_expressions": found_equations,
+                    "rest_string": string[position + 9:]
+                }
             elif self.comma_p.parse(string[position:]) != []:
                 # found comma, add the equation to the list and reset the current equation
                 found_equations.append(current_equation)
                 current_equation = ''
+                position += 1
             else:
                 current_equation += current_character
-            position += 1
+                position += 1
         # if the end of the string is reached, return the equations and the rest of the string
         found_equations.append(current_equation)
         return {
@@ -339,7 +437,6 @@ class ParseDiophantine():
         }
             
     # main parsing function
-
     def parse_problem(self, current_string, kw1_found=False, kw2_found=False):
 
         if len(current_string) < 1: return ""
@@ -375,17 +472,12 @@ class ParseDiophantine():
         elif (kw1_found and kw2_found):
             if len(current_string) < 1: return ""
 
-
-# Testing the parser
-
-# without constraints
-# problem0 = " Solve  x + 2 = 3"
-# problem1 = " Solve  x + 2 = 3, y + 3 = 4"
-# problem2 = " Solve  x + 2 = 3, y + 3 = 4, x*2 = 4"
-# problem3 = " Solve x + 2 = 3, y + 3 = 4, x*2 = 4, y * (2 + y) = 6"
-# problem4 = " Solve y * (2 + y) + 1 = y * (2 + x), x = 2"
-
-# parser = ParseDiophantine()
-
-# for equation in parser.parse_problem(problem4)["equations"]:
-#     print(equation)
+            # Find all constraints
+            equation_finder = self.equations_finder(current_string)
+            constraints = equation_finder["found_expressions"]
+            
+            # Parse constraints to symbolic classes
+            symbolic_constraints = []
+            for constraint in constraints:
+                symbolic_constraints.append(self.parse_constraint(constraint))
+            return symbolic_constraints

@@ -1,6 +1,4 @@
-# Joint paper
-
-## BNF Grammar
+# BNF Grammar
 
 ```bnf
 <task> ::= 'Solve' <system>
